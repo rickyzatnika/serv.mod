@@ -23,7 +23,8 @@ export async function getUser(username) {
   if (db) {
     try {
       const raw = await db.hget("users", username)
-      return raw ? JSON.parse(raw) : null
+      if (typeof raw === "string") return JSON.parse(raw)
+      return raw || null
     } catch (e) { console.error("KV getUser error:", e) }
   }
   return memoryStore[username] || null
@@ -58,7 +59,10 @@ export async function getAllUsers() {
       const raw = await db.hgetall("users")
       if (!raw) return {}
       const result = {}
-      for (const [key, val] of Object.entries(raw)) result[key] = JSON.parse(val)
+      for (const [key, val] of Object.entries(raw)) {
+        if (typeof val === "string") result[key] = JSON.parse(val)
+        else result[key] = val
+      }
       return result
     } catch (e) { console.error("KV getAllUsers error:", e) }
   }
@@ -87,7 +91,7 @@ export async function getLogs() {
   if (db) {
     try {
       const raw = await db.lrange("logs", 0, MAX_LOGS - 1)
-      return (raw || []).map(r => JSON.parse(r))
+      return (raw || []).map(r => typeof r === "string" ? JSON.parse(r) : r)
     } catch (e) { console.error("KV getLogs error:", e) }
   }
   return [...memoryLogs]
