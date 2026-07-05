@@ -2,7 +2,39 @@ import { getAllUsers, getLogs } from "../data"
 
 const ADMIN_TOKEN = "admin123"
 
-export default function Panel({ users, logs, now }) {
+export default function Panel({ users, logs, now, authed, error }) {
+  if (!authed) {
+    return (
+      <html>
+        <head>
+          <title>MOD License Panel - Login</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <style>{`
+            * { margin:0; padding:0; box-sizing:border-box; }
+            body { font-family:system-ui,-apple-system,sans-serif; background:linear-gradient(135deg,#667eea,#764ba2); min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+            .card { background:white; border-radius:16px; padding:32px; width:100%; max-width:400px; box-shadow:0 10px 40px rgba(0,0,0,0.15); text-align:center; }
+            h1 { font-size:24px; margin-bottom:24px; color:#333; }
+            input { width:100%; padding:12px 16px; border:2px solid #e0e0e0; border-radius:8px; font-size:14px; margin-bottom:12px; outline:none; }
+            input:focus { border-color:#667eea; }
+            button { width:100%; padding:12px; background:#667eea; color:white; border:none; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; }
+            button:hover { background:#5a6fd6; }
+            .error { color:#e74c3c; font-size:13px; margin-top:8px; }
+          `}</style>
+        </head>
+        <body>
+          <div className="card">
+            <h1>MOD License Panel</h1>
+            {error && <p className="error">Token salah!</p>}
+            <form method="POST" action="/api/login-panel">
+              <input type="password" name="token" placeholder="Masukkan Token Admin" required />
+              <button type="submit">Masuk</button>
+            </form>
+          </div>
+        </body>
+      </html>
+    )
+  }
+
   return (
     <html>
       <head>
@@ -30,11 +62,13 @@ export default function Panel({ users, logs, now }) {
           .badge { display:inline-block; padding:3px 10px; border-radius:12px; font-size:12px; font-weight:600; }
           .badge-active { background:#27ae6020; color:#27ae60; }
           .badge-expired { background:#e74c3c20; color:#e74c3c; }
+          .logout { float:right; color:white; text-decoration:none; font-size:13px; opacity:0.8; margin-top:8px; display:inline-block; }
+          .logout:hover { opacity:1; }
         `}</style>
       </head>
       <body>
         <div className="container">
-          <h1>&#9881; MOD License Server</h1>
+          <h1>MOD License Server <a href="/panel?logout=1" className="logout">Logout</a></h1>
           <div className="card">
             <h2>+ Tambah Lisensi Baru</h2>
             <form method="POST" action="/admin/add">
@@ -93,8 +127,35 @@ export default function Panel({ users, logs, now }) {
   )
 }
 
-export async function getServerSideProps() {
+export async function getServerSideProps({ req, res }) {
+  const cookies = parseCookies(req.headers.cookie || "")
+  let authed = cookies.admin_token === ADMIN_TOKEN
+  let error = false
+
+  if (req.url?.includes("error=1")) {
+    error = true
+  }
+
+  if (req.url?.includes("logout=1")) {
+    authed = false
+    res.setHeader("Set-Cookie", "admin_token=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0")
+  }
+
+  if (!authed) {
+    return { props: { authed: false, error } }
+  }
+
   const [users, logs] = await Promise.all([getAllUsers(), getLogs()])
   const now = new Date().toISOString().slice(0, 10)
-  return { props: { users, logs, now } }
+  return { props: { users, logs, now, authed: true, error: false } }
+}
+
+function parseCookies(cookie) {
+  const obj = {}
+  if (!cookie) return obj
+  cookie.split(";").forEach((c) => {
+    const [k, ...v] = c.trim().split("=")
+    if (k) obj[k.trim()] = decodeURIComponent(v.join("="))
+  })
+  return obj
 }
