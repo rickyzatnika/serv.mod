@@ -2,7 +2,7 @@ export default function handler(req, res) {
   const ADMIN_TOKEN = "admin123"
 
   if (req.method !== "POST") {
-    res.redirect("/panel")
+    res.writeHead(302, { Location: "/panel" }).end()
     return
   }
 
@@ -10,8 +10,8 @@ export default function handler(req, res) {
 
   if (token === ADMIN_TOKEN) {
     res.setHeader("Set-Cookie", `admin_token=${ADMIN_TOKEN}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400`)
-    res.redirect("/panel")
+    res.writeHead(302, { Location: "/panel" }).end()
   } else {
-    res.redirect("/panel?error=1")
+    res.writeHead(302, { Location: "/panel?error=invalid_token" }).end()
   }
 }

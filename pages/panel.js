@@ -2,7 +2,7 @@ import { getAllUsers, getLogs } from "../data"
 
 const ADMIN_TOKEN = "admin123"
 
-export default function Panel({ users, logs, now, authed, error }) {
+export default function Panel({ users, logs, now, authed, error, success, deleted }) {
   if (!authed) {
     return (
       <html>
@@ -24,7 +24,7 @@ export default function Panel({ users, logs, now, authed, error }) {
         <body>
           <div className="card">
             <h1>MOD License Panel</h1>
-            {error && <p className="error">Token salah!</p>}
+            {error === "invalid_token" && <p className="error">Token salah!</p>}
             <form method="POST" action="/api/login-panel">
               <input type="password" name="token" placeholder="Masukkan Token Admin" required />
               <button type="submit">Masuk</button>
@@ -47,6 +47,9 @@ export default function Panel({ users, logs, now, authed, error }) {
           .card { background:white; border-radius:16px; padding:24px; margin-bottom:20px; box-shadow:0 10px 40px rgba(0,0,0,0.15); }
           h1 { color:white; text-align:center; margin-bottom:24px; font-size:28px; }
           h2 { font-size:18px; margin-bottom:16px; color:#667eea; }
+          .toast { padding:12px 16px; border-radius:8px; margin-bottom:16px; font-size:14px; font-weight:500; }
+          .toast-success { background:#27ae6020; color:#27ae60; border:1px solid #27ae60; }
+          .toast-error { background:#e74c3c20; color:#e74c3c; border:1px solid #e74c3c; }
           input, button { width:100%; padding:12px 16px; border-radius:8px; font-size:14px; margin-bottom:8px; }
           input { border:2px solid #e0e0e0; outline:none; }
           input:focus { border-color:#667eea; }
@@ -69,9 +72,13 @@ export default function Panel({ users, logs, now, authed, error }) {
       <body>
         <div className="container">
           <h1>MOD License Server <a href="/panel?logout=1" className="logout">Logout</a></h1>
+          {success && <div className="toast toast-success">Lisensi {success} berhasil ditambahkan!</div>}
+          {deleted && <div className="toast toast-success">Lisensi berhasil dihapus!</div>}
+          {error === "missing_fields" && <div className="toast toast-error">Username & Password wajib diisi!</div>}
+          {error === "unauthorized" && <div className="toast toast-error">Token tidak valid!</div>}
           <div className="card">
             <h2>+ Tambah Lisensi Baru</h2>
-            <form method="POST" action="/admin/add">
+            <form method="POST" action="/api/admin/add">
               <input type="hidden" name="admin_token" value={ADMIN_TOKEN} />
               <input type="text" name="username" placeholder="Username" required />
               <input type="text" name="password" placeholder="Password" required />
@@ -96,7 +103,7 @@ export default function Panel({ users, logs, now, authed, error }) {
                       : <span className="badge badge-expired">Expired</span>}
                   </td>
                   <td>
-                    <form method="POST" action="/admin/delete" style={{ display: "inline" }}>
+                    <form method="POST" action="/api/admin/delete" style={{ display: "inline" }}>
                       <input type="hidden" name="admin_token" value={ADMIN_TOKEN} />
                       <input type="hidden" name="username" value={u} />
                       <button className="btn-danger" type="submit">Hapus</button>
@@ -127,27 +134,30 @@ export default function Panel({ users, logs, now, authed, error }) {
   )
 }
 
-export async function getServerSideProps({ req, res }) {
+export async function getServerSideProps({ req, res, query }) {
   const cookies = parseCookies(req.headers.cookie || "")
   let authed = cookies.admin_token === ADMIN_TOKEN
-  let error = false
+  let error = query.error || null
+  const success = query.success || null
+  const deleted = query.deleted || null
 
-  if (req.url?.includes("error=1")) {
-    error = true
-  }
-
-  if (req.url?.includes("logout=1")) {
+  if (query.logout === "1") {
     authed = false
     res.setHeader("Set-Cookie", "admin_token=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0")
   }
 
   if (!authed) {
-    return { props: { authed: false, error } }
+    return { props: { authed: false, error: error === "invalid_token" ? "invalid_token" : null, success: null, deleted: null } }
   }
 
-  const [users, logs] = await Promise.all([getAllUsers(), getLogs()])
-  const now = new Date().toISOString().slice(0, 10)
-  return { props: { users, logs, now, authed: true, error: false } }
+  try {
+    const [users, logs] = await Promise.all([getAllUsers(), getLogs()])
+    const now = new Date().toISOString().slice(0, 10)
+    return { props: { users, logs, now, authed: true, error, success, deleted } }
+  } catch (e) {
+    console.error("Panel error:", e)
+    return { props: { authed: true, users: {}, logs: [], now: "", error: "server_error", success: null, deleted: null } }
+  }
 }
 
 function parseCookies(cookie) {
